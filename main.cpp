@@ -113,21 +113,47 @@ public:
   }
 };
 
-
+float MSE(const vector<float>& outactivs,
+	  const vector<float>& desiredout,
+	  float& cost){
+  cost = 0;
+  for (int neuron = 0; neuron < outactivs.size(); neuron++){
+    cost += pow((outactivs[neuron]-desiredout[neuron]) ,2);
+  }
+  return cost;
+}
 int main(){
   neuralnet net1;
-  printVVV(net1.weights);
 
-  printVV(net1.biases);
-  printVV(net1.activations);
-  printVV(net1.presigactivations);
-
+  vector<vector<float>> nabla_b;
+  float cost;
+  nabla_b.resize(net1.biases.size());
+  for (int layer = 0; layer < nabla_b.size(); layer++){
+    nabla_b.resize(net1.biases[layer].size());
+  }
+  
+  float eta = 1;
+  
   net1.activations[0] = {0.4, 0.5};
   net1.feedforwards();
-  
-  printVV(net1.activations);
-  
   net1.backprop();
-  cout << "delta:" << endl;
-  printVV(net1.delta);
+  
+  cout << "costbefore:" << endl;
+  MSE(net1.activations.back(), net1.desiredoutput, cost);
+  cout << cost << endl;
+  
+  //update biases
+  for (int layer = 0; layer < net1.biases.size(); layer++){
+    nabla_b[layer] = net1.delta[layer];
+    scalarmultiply(nabla_b[layer], eta, nabla_b[layer]);
+    vectsub(net1.biases[layer], nabla_b[layer], net1.biases[layer]);
+  }
+
+  net1.feedforwards();
+  
+  cout << "costafter:" << endl;
+  MSE(net1.activations.back(), net1.desiredoutput, cost);
+  cout << cost << endl;
+  
+  
 }
