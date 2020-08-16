@@ -3,6 +3,7 @@
 #include <random>
 #include "vectio.h"
 #include "nnmath.h"
+#include "mnist.h"
 using namespace std;
 
 
@@ -11,10 +12,8 @@ private:
   random_device rd{};
   mt19937_64 generator{rd()};
   uniform_real_distribution<float> dist;
-  
-public:
-  vector<int> sizes = {2,3,2}; //specify network size
 
+public:
   //general network variables:
   vector<vector<vector<float>>> weights;
   vector<vector<float>> biases;
@@ -28,15 +27,15 @@ public:
   vector<vector<float>> dp;
   vector<float> desiredoutput;
   vector<vector<float>> delta;
-  
+
   void feedforwards(){
   for (int layer = 0; layer < this->activations.size()-1; layer++){
     for (int neuron = 0; neuron < this->activations[layer+1].size(); neuron++){
       dot(this->weights[layer][neuron], this->activations[layer], this->activations[layer+1][neuron]);
-      }
+    }
     vectadd(this->activations[layer+1], this->biases[layer], this->activations[layer+1]);
     this->presigactivations[layer+1] = this->activations[layer+1];
-    vectsigmoid(activations[layer+1], this->activations[layer+1]);
+    vectsigmoid(this->activations[layer+1], this->activations[layer+1]);
     }
   }
 
@@ -52,61 +51,61 @@ public:
     for (int layer = this->delta.size()-2; layer > -1; layer--){
       transpose(this->weights[layer+1], this->tpw); //get transpose of weights[layer+1] and save in tpw
       for (int neuron = 0; neuron < this->activations[layer+1].size(); neuron++){ //get dotprod of tpw and delta[layer+1]
-	this->dp[layer][neuron] = dot(this->tpw[neuron], this->delta[layer+1], this->dp[layer][neuron]);
+        dot(this->tpw[neuron], this->delta[layer+1], this->dp[layer][neuron]);
       }
       hadamard(this->dp[layer], this->sigprime[layer], this->delta[layer]);
     }
   }
-  
+
   //initialise variables
-  neuralnet(){
-    typename std::uniform_real_distribution<float>::param_type prms (float{0}, float{1});
-    this->dist.param (prms);  
+  neuralnet(vector<int> sizes){
+    typename std::uniform_real_distribution<float>::param_type prms (float{-1}, float{1});
+    this->dist.param (prms);
     //fill weights
-    this->weights.resize(this->sizes.size()-1);
+    this->weights.resize(sizes.size()-1);
     for (int layer = 0; layer < this->weights.size(); layer++){
-      this->weights[layer].resize(this->sizes[layer+1]);
+      this->weights[layer].resize(sizes[layer+1]);
       for (int sublayer = 0; sublayer < this->weights[layer].size(); sublayer++){
-	this->weights[layer][sublayer].resize(this->sizes[layer]);
+	this->weights[layer][sublayer].resize(sizes[layer]);
 	for (int item = 0; item < this->weights[layer][sublayer].size(); item++){
 	  this->weights[layer][sublayer][item] = dist(generator);
 	}
       }
-    }  
+    }
     //fill biases
-    this->biases.resize(this->sizes.size()-1);
+    this->biases.resize(sizes.size()-1);
     for (int layer = 0; layer < this->biases.size(); layer++){
-      this->biases[layer].resize(this->sizes[layer+1]);
+      this->biases[layer].resize(sizes[layer+1]);
       for (int item = 0; item < this->biases[layer].size(); item++){
 	this->biases[layer][item] = dist(generator);
       }
     }
     //resize activations
-    this->activations.resize(this->sizes.size());
+    this->activations.resize(sizes.size());
     for (int layer = 0; layer < this->activations.size(); layer++){
-      this->activations[layer].resize(this->sizes[layer]);
+      this->activations[layer].resize(sizes[layer]);
     }
     //resize presigactivations vector
-    this->presigactivations.resize(this->sizes.size());
+    this->presigactivations.resize(sizes.size());
     for (int layer = 0; layer < this->presigactivations.size(); layer++){
-      this->presigactivations[layer].resize(this->sizes[layer]);
+      this->presigactivations[layer].resize(sizes[layer]);
     }
 
-    
+
     //do stuff on backprop variables:
-    this->nabC.resize(this->sizes.back());
-    this->sigprime.resize(this->sizes.size()-1);
-    this->dp.resize(this->sizes.size()-2);
-    this->desiredoutput.resize(this->sizes.back());
-    this->delta.resize(this->sizes.size()-1);
+    this->nabC.resize(sizes.back());
+    this->sigprime.resize(sizes.size()-1);
+    this->dp.resize(sizes.size()-2);
+    this->desiredoutput.resize(sizes.back());
+    this->delta.resize(sizes.size()-1);
     for (int layer = 0; layer < this->dp.size(); layer++){
-      this->dp[layer].resize(this->sizes[layer+1]);
+      this->dp[layer].resize(sizes[layer+1]);
     }
     for (int layer = 0; layer < this->delta.size(); layer++){
-      this->delta[layer].resize(this->sizes[layer+1]);
+      this->delta[layer].resize(sizes[layer+1]);
     }
     for (int layer = 0; layer < this->sigprime.size(); layer++){
-      this->sigprime[layer].resize(this->sizes[layer+1]);
+      this->sigprime[layer].resize(sizes[layer+1]);
     }
 
 
@@ -122,38 +121,83 @@ float MSE(const vector<float>& outactivs,
   }
   return cost;
 }
-int main(){
-  neuralnet net1;
 
-  vector<vector<float>> nabla_b;
+
+
+
+
+
+
+
+
+
+
+
+
+int main(){
+  neuralnet net1({784,32,10});
+
   float cost;
+
+  float eta = 1;
+
+  cout << "loading images" << endl;
+  vector<vector<float>> imgs = loadimages();
+  vector<int> labels = loadlabels();
+  cout << "images loaded" << endl;
+  cout << "normalizing data" << endl;
+  for (auto& i : imgs){
+    for (auto& i2 : i){
+      i2 = i2/255;
+    }
+  }
+  //create nabla_b
+  vector<vector<float>> nabla_b;
   nabla_b.resize(net1.biases.size());
-  for (int layer = 0; layer < nabla_b.size(); layer++){
+  for (int layer = 0; layer < net1.biases.size(); layer++){
     nabla_b.resize(net1.biases[layer].size());
   }
-  
-  float eta = 1;
-  
-  net1.activations[0] = {0.4, 0.5};
-  net1.feedforwards();
-  net1.backprop();
-  
-  cout << "costbefore:" << endl;
-  MSE(net1.activations.back(), net1.desiredoutput, cost);
-  cout << cost << endl;
-  
-  //update biases
-  for (int layer = 0; layer < net1.biases.size(); layer++){
-    nabla_b[layer] = net1.delta[layer];
-    scalarmultiply(nabla_b[layer], eta, nabla_b[layer]);
-    vectsub(net1.biases[layer], nabla_b[layer], net1.biases[layer]);
+  //create nabla_w
+  vector<vector<vector<float>>> nabla_w;
+  nabla_w.resize(net1.weights.size());
+  for (int layer = 0; layer < net1.weights.size(); layer++){
+    nabla_w[layer].resize(net1.weights[layer].size());
+    for (int sublayer = 0; sublayer < net1.weights[layer].size(); sublayer++){
+      nabla_w[layer][sublayer].resize(net1.weights[layer][sublayer].size());
+    }
   }
 
-  net1.feedforwards();
-  
-  cout << "costafter:" << endl;
-  MSE(net1.activations.back(), net1.desiredoutput, cost);
-  cout << cost << endl;
-  
-  
+  for (int epoch = 0; epoch < 1; epoch++){
+    for (int image = 0; image < 60000; image++){
+      net1.activations[0] = imgs[epoch];
+      net1.desiredoutput = {0,0,0,0,0,0,0,0,0,0};
+      net1.desiredoutput[labels[image]] = 1;
+
+      net1.feedforwards();
+      net1.backprop();
+
+      MSE(net1.activations.back(), net1.desiredoutput, cost);
+      cout << cost << endl;
+
+      //something about updating currently doesnt work
+      //cost wont go lower than 0.8
+      //updating only the biases or only the weights gets the same result
+
+      
+      //update biases
+      for (int layer = 0; layer < net1.biases.size(); layer++){
+	nabla_b[layer] = net1.delta[layer];
+	vectbyscalarmultiply(nabla_b[layer], eta, nabla_b[layer]);
+	vectsub(net1.biases[layer], nabla_b[layer], net1.biases[layer]);
+      }
+      //update weights
+      for (int layer = 0; layer < net1.weights.size(); layer++){
+	for (int neuron = 0; neuron < net1.weights[layer].size(); neuron++){
+	  vectbyscalarmultiply(net1.activations[layer], net1.delta[layer][neuron], nabla_w[layer][neuron]);
+	  vectbyscalarmultiply(nabla_w[layer][neuron], eta, nabla_w[layer][neuron]);
+	  vectsub(net1.weights[layer][neuron], nabla_w[layer][neuron], net1.weights[layer][neuron]);
+	}
+      }
+    }
+  }
 }
