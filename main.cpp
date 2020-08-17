@@ -166,24 +166,19 @@ int main(){
       nabla_w[layer][sublayer].resize(net1.weights[layer][sublayer].size());
     }
   }
-
+  
   for (int epoch = 0; epoch < 1; epoch++){
-    for (int image = 0; image < 60000; image++){
-      net1.activations[0] = imgs[epoch];
+    for (int image = 0; image < 20000; image++){
+      net1.activations[0] = imgs[image];
       net1.desiredoutput = {0,0,0,0,0,0,0,0,0,0};
       net1.desiredoutput[labels[image]] = 1;
-
+      
       net1.feedforwards();
       net1.backprop();
 
       MSE(net1.activations.back(), net1.desiredoutput, cost);
       cout << cost << endl;
 
-      //something about updating currently doesnt work
-      //cost wont go lower than 0.8
-      //updating only the biases or only the weights gets the same result
-
-      
       //update biases
       for (int layer = 0; layer < net1.biases.size(); layer++){
 	nabla_b[layer] = net1.delta[layer];
