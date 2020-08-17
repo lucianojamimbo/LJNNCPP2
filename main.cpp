@@ -139,7 +139,9 @@ int main(){
 
   float cost;
 
-  float eta = 1;
+  float eta = 3;
+
+  int batch_size = 10;
 
   cout << "loading images" << endl;
   vector<vector<float>> imgs = loadimages();
@@ -155,7 +157,7 @@ int main(){
   vector<vector<float>> nabla_b;
   nabla_b.resize(net1.biases.size());
   for (int layer = 0; layer < net1.biases.size(); layer++){
-    nabla_b.resize(net1.biases[layer].size());
+    nabla_b[layer].resize(net1.biases[layer].size());
   }
   //create nabla_w
   vector<vector<vector<float>>> nabla_w;
@@ -166,30 +168,48 @@ int main(){
       nabla_w[layer][sublayer].resize(net1.weights[layer][sublayer].size());
     }
   }
+  //create nabla_w_temp
+  vector<vector<vector<float>>> nabla_w_temp;
+  nabla_w_temp.resize(net1.weights.size());
+  for (int layer = 0; layer < net1.weights.size(); layer++){
+    nabla_w_temp[layer].resize(net1.weights[layer].size());
+    for (int sublayer = 0; sublayer < net1.weights[layer].size(); sublayer++){
+      nabla_w_temp[layer][sublayer].resize(net1.weights[layer][sublayer].size());
+    }
+  }
+
+  vector<float> temp = {};
   
-  for (int epoch = 0; epoch < 1; epoch++){
-    for (int image = 0; image < 20000; image++){
-      net1.activations[0] = imgs[image];
-      net1.desiredoutput = {0,0,0,0,0,0,0,0,0,0};
-      net1.desiredoutput[labels[image]] = 1;
-      
-      net1.feedforwards();
-      net1.backprop();
-
-      MSE(net1.activations.back(), net1.desiredoutput, cost);
-      cout << cost << endl;
-
+  for (int epoch = 0; epoch < 10; epoch++){
+    for (int image = 0; image < 60000/batch_size; image++){
+      for (int batchiter = 0; batchiter < batch_size; batchiter++){
+	net1.activations[0] = imgs[image];
+	net1.desiredoutput = {0,0,0,0,0,0,0,0,0,0};
+	net1.desiredoutput[labels[image]] = 1;
+	net1.feedforwards();
+	net1.backprop();
+	//calc nabla_b
+	for (int layer = 0; layer < net1.biases.size(); layer++){
+	  vectadd(nabla_b[layer], net1.delta[layer], nabla_b[layer]);
+	}
+	//calc nabla_w
+	for (int layer = 0; layer < net1.weights.size(); layer++){
+	  for (int neuron = 0; neuron < net1.weights[layer].size(); neuron++){
+	    vectbyscalarmultiply(net1.activations[layer], net1.delta[layer][neuron], nabla_w_temp[layer][neuron]);
+	    vectadd(nabla_w[layer][neuron], nabla_w_temp[layer][neuron], nabla_w[layer][neuron]);
+	  }
+	}
+	image += 1;
+      }
       //update biases
       for (int layer = 0; layer < net1.biases.size(); layer++){
-	nabla_b[layer] = net1.delta[layer];
-	vectbyscalarmultiply(nabla_b[layer], eta, nabla_b[layer]);
+	vectbyscalarmultiply(nabla_b[layer], eta/batch_size, nabla_b[layer]);
 	vectsub(net1.biases[layer], nabla_b[layer], net1.biases[layer]);
       }
       //update weights
       for (int layer = 0; layer < net1.weights.size(); layer++){
 	for (int neuron = 0; neuron < net1.weights[layer].size(); neuron++){
-	  vectbyscalarmultiply(net1.activations[layer], net1.delta[layer][neuron], nabla_w[layer][neuron]);
-	  vectbyscalarmultiply(nabla_w[layer][neuron], eta, nabla_w[layer][neuron]);
+	  vectbyscalarmultiply(nabla_w[layer][neuron], eta/batch_size, nabla_w[layer][neuron]);
 	  vectsub(net1.weights[layer][neuron], nabla_w[layer][neuron], net1.weights[layer][neuron]);
 	}
       }
