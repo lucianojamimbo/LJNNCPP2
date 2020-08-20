@@ -1,6 +1,0 @@
-#include <vector>
-#include "mnist.h"
-
-using namespace std;
-
-loadlabels()
