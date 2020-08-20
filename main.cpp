@@ -70,13 +70,11 @@ public:
   }
 
   void updateparams(const float& eta, const int& batch_size){
-
     //update biases
     for (int layer = 0; layer < this->biases.size(); layer++){
       vectbyscalarmultiply(this->nabla_b[layer], eta/batch_size, this->nabla_b[layer]);
       vectsub(this->biases[layer], this->nabla_b[layer], this->biases[layer]);
     }
-
     //update weights
     for (int layer = 0; layer < this->weights.size(); layer++){
       for (int neuron = 0; neuron < this->weights[layer].size(); neuron++){
@@ -86,12 +84,30 @@ public:
     }
 
   }
+  
+  void test(const vector<vector<float>>& timg,
+	    const vector<int>& tlabel
+	    ){
+    int correctclassifications = 0;
+    for (int image = 0; image < 10000; image++){
+      this->activations[0] = timg[image];
+      this->feedforwards();
+      if ((max_element(this->activations.back().begin(), this->activations.back().end()) - this->activations.back().begin()) == tlabel[image]){
+	correctclassifications += 1;
+      }
+    }
+    cout << "images correctly classified out of 10000: " << correctclassifications << endl;
+  }
 
+
+  
   void SGD(const int batch_size,
 	   const float eta,
 	   const int epochamount,
 	   vector<vector<float>>& imgs,
-	   vector<int>& labels
+	   vector<int>& labels,
+	   vector<vector<float>>& testimgs,
+	   vector<int>& testlabels
 	   ){
     for (int epoch = 0; epoch < epochamount; epoch++){
       for (int image = 0; image < 60000/batch_size; image++){
@@ -120,6 +136,8 @@ public:
 	//update network parameters based on n_w and n_b:
 	this->updateparams(eta, batch_size);
       }
+      cout << "epoch " << epoch << " complete" << endl;
+      this->test(testimgs, testlabels);
     }
   }
 
@@ -219,19 +237,6 @@ float MSE(const vector<float>& outactivs,
   return cost;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 int main(){
   //load dataset:
   cout << "Loading data" << endl;
@@ -257,16 +262,8 @@ int main(){
   //create and train network:
   neuralnet net1({784,32,10}); //sets network shape
   cout << "Training with SGD..." << endl;
-  net1.SGD(10, 3, 15, imgs, labels); //batch_size, eta, epochamount, images, labels
+  net1.SGD(10, 3, 30, imgs, labels, testimgs, testlabels); //batch_size, eta, epochamount, images, labels, testimages, testlabels
   cout << "Stochastic gradient descent complete" << endl;
   //test network performance:
-  int correctclassifications = 0;
-  for (int image = 0; image < 10000; image++){
-    net1.activations[0] = testimgs[image];
-    net1.feedforwards();
-    if ((max_element(net1.activations.back().begin(), net1.activations.back().end()) - net1.activations.back().begin()) == testlabels[image]){
-      correctclassifications += 1;
-    }
-  }
-  cout << "images correctly classified out of 10000: " << correctclassifications << endl;
+  net1.test(testimgs, testlabels);
 }
