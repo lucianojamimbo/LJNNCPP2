@@ -86,10 +86,11 @@ public:
   }
   
   void test(const vector<vector<float>>& timg,
-	    const vector<int>& tlabel
+	    const vector<int>& tlabel,
+	    const int testdatasize
 	    ){
     int correctclassifications = 0;
-    for (int image = 0; image < 10000; image++){
+    for (int image = 0; image < testdatasize; image++){
       this->activations[0] = timg[image];
       this->feedforwards();
       if ((max_element(this->activations.back().begin(), this->activations.back().end()) - this->activations.back().begin()) == tlabel[image]){
@@ -104,11 +105,12 @@ public:
   void SGD(const int batch_size,
 	   const float eta,
 	   const int epochamount,
-	   vector<vector<float>>& imgs,
-	   vector<int>& labels,
-	   vector<vector<float>>& testimgs,
-	   vector<int>& testlabels,
-	   int datasize
+	   const vector<vector<float>>& imgs,
+	   const vector<int>& labels,
+	   const vector<vector<float>>& testimgs,
+	   const vector<int>& testlabels,
+	   const int datasize,
+	   const int testdatasize
 	   ){
     
     //create a vector with a length the same as the size of our data,
@@ -152,7 +154,7 @@ public:
 	this->updateparams(eta, batch_size);
       }
       cout << "epoch " << epoch << " complete" << endl;
-      this->test(testimgs, testlabels);
+      this->test(testimgs, testlabels, testdatasize);
     }
   }
 
@@ -277,8 +279,8 @@ int main(){
   //create and train network:
   neuralnet net1({784,32,10}); //sets network shape
   cout << "Training with SGD..." << endl;
-  net1.SGD(10, 3, 30, imgs, labels, testimgs, testlabels, 60000); //batch_size, eta, epochamount, images, labels, testimages, testlabels, datasize
+  net1.SGD(10, 3, 30, imgs, labels, testimgs, testlabels, 60000, 10000); //batch_size, eta, epochamount, images, labels, testimages, testlabels, datasize, testdatasize
   cout << "Stochastic gradient descent complete" << endl;
   //test network performance:
-  net1.test(testimgs, testlabels);
+  net1.test(testimgs, testlabels, 10000);
 }
