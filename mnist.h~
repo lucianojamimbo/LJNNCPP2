@@ -1,6 +1,0 @@
-#include <vector>
-
-int chars_to_int (const char* buf){
-  int rtn = (buf[3]&0xff) | (buf[2]&0xff)<<8 | (buf[1]&0xff)<<16 | (buf[0]&0xff)<<24;
-  return rtn;
-}
