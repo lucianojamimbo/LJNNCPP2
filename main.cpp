@@ -18,6 +18,7 @@ public:
   vector<vector<float>> biases;
   vector<vector<float>> activations;
   vector<vector<float>> presigactivations;
+  float cost;
 
   //variables for backprop:
   vector<vector<float>> tpw;
@@ -84,6 +85,42 @@ public:
     }
 
   }
+
+  void SGD(const int batch_size,
+	   const float eta,
+	   vector<vector<float>>& imgs,
+	   vector<int>& labels
+	   ){
+    for (int epoch = 0; epoch < 10; epoch++){
+      for (int image = 0; image < 60000/batch_size; image++){
+	//calc n_b and n_w over a batch:
+	for (int batchiter = 0; batchiter < batch_size; batchiter++){
+	  this->activations[0] = imgs[image]; //set net input
+	  this->desiredoutput = {0,0,0,0,0,0,0,0,0,0};
+	  this->desiredoutput[labels[image]] = 1;
+	  this->feedforwards(); //forwards pass to calculate activations
+	  this->backprop(); //backwards pass to calculate delta
+	  //MSE(net1.activations.back(), net1.desiredoutput, net1.cost);
+	  //cout << net1.cost << endl;
+	  image += 1;
+	  //calc nabla_b
+	  for (int layer = 0; layer < this->biases.size(); layer++){
+	    vectadd(this->nabla_b[layer], this->delta[layer], this->nabla_b[layer]);
+	  }
+	  //calc nabla_w
+	  for (int layer = 0; layer < this->weights.size(); layer++){
+	    for (int neuron = 0; neuron < this->weights[layer].size(); neuron++){
+	      vectbyscalarmultiply(this->activations[layer], this->delta[layer][neuron], this->nabla_w_temp[layer][neuron]);
+	      vectadd(this->nabla_w[layer][neuron], this->nabla_w_temp[layer][neuron], this->nabla_w[layer][neuron]);
+	    }
+	  }
+	}
+	//update network parameters based on n_w and n_b:
+	this->updateparams(eta, batch_size);
+      }
+    }
+  }
+
   
   //initialise variables
   neuralnet(const vector<int>& sizes){
@@ -193,50 +230,26 @@ float MSE(const vector<float>& outactivs,
 
 
 
-
-
-
-
 int main(){
-  neuralnet net1({784,32,10});
-  float cost;
-  float eta = 3;
-  int batch_size = 10;
-  cout << "loading images" << endl;
+
+  //load dataset:
+  cout << "Loading images" << endl;
   vector<vector<float>> imgs = loadimages();
   vector<int> labels = loadlabels();
-  cout << "images loaded" << endl;
-  cout << "normalizing data" << endl;
+  cout << "Images loaded" << endl;
+  cout << "Normalising data" << endl;
   for (auto& i : imgs){
     for (auto& i2 : i){
       i2 = i2/255;
     }
   }
+  cout << "Data normalised" << endl;
   
-  for (int epoch = 0; epoch < 10; epoch++){
-    for (int image = 0; image < 60000/batch_size; image++){
-      for (int batchiter = 0; batchiter < batch_size; batchiter++){
-	net1.activations[0] = imgs[image];
-	net1.desiredoutput = {0,0,0,0,0,0,0,0,0,0};
-	net1.desiredoutput[labels[image]] = 1;
-	net1.feedforwards();
-	net1.backprop();
-	image += 1;
-	//calc nabla_b
-	for (int layer = 0; layer < net1.biases.size(); layer++){
-	  vectadd(net1.nabla_b[layer], net1.delta[layer], net1.nabla_b[layer]);
-	}
-	//calc nabla_w
-	for (int layer = 0; layer < net1.weights.size(); layer++){
-	  for (int neuron = 0; neuron < net1.weights[layer].size(); neuron++){
-	    vectbyscalarmultiply(net1.activations[layer], net1.delta[layer][neuron], net1.nabla_w_temp[layer][neuron]);
-	    vectadd(net1.nabla_w[layer][neuron], net1.nabla_w_temp[layer][neuron], net1.nabla_w[layer][neuron]);
-	  }
-	}
-      }
-      MSE(net1.activations.back(), net1.desiredoutput, cost);
-      cout << cost << endl;
-      net1.updateparams(eta, batch_size);
-    }
-  }
+  //create and train network:
+  neuralnet net1({784,32,10}); //sets network shape
+  net1.SGD(10, 3, imgs, labels); //batch_size, eta, images, labels
+
+  //test network performance:
+  
+  
 }
