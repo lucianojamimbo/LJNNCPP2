@@ -107,15 +107,30 @@ public:
 	   vector<vector<float>>& imgs,
 	   vector<int>& labels,
 	   vector<vector<float>>& testimgs,
-	   vector<int>& testlabels
+	   vector<int>& testlabels,
+	   int datasize
 	   ){
+    
+    //create a vector with a length the same as the size of our data,
+    //then make shuffledata[i] = i.
+    //then we can shuffle shuffledata every epoch and use it to index our data in a random way
+    //without shuffling our data directly.
+    //which is probably faster since less memory is moved around.
+    auto rng = std::default_random_engine {};
+    vector<int> shuffledata;
+    shuffledata.resize(datasize);
+    for (int i = 0; i < datasize; i++){
+      shuffledata[i] = i;
+    }
+    
     for (int epoch = 0; epoch < epochamount; epoch++){
-      for (int image = 0; image < 60000/batch_size; image++){
+      shuffle(begin(shuffledata), end(shuffledata), rng); //do this so we access our data in a different order every epoch
+      for (int image = 0; image < datasize/batch_size; image++){
 	//calc n_b and n_w over a batch:
 	for (int batchiter = 0; batchiter < batch_size; batchiter++){
-	  this->activations[0] = imgs[image]; //set net input
+	  this->activations[0] = imgs[shuffledata[image]]; //set net input
 	  this->desiredoutput = {0,0,0,0,0,0,0,0,0,0};
-	  this->desiredoutput[labels[image]] = 1;
+	  this->desiredoutput[labels[shuffledata[image]]] = 1;
 	  this->feedforwards(); //forwards pass to calculate activations
 	  this->backprop(); //backwards pass to calculate delta
 	  //MSE(net1.activations.back(), net1.desiredoutput, net1.cost);
@@ -262,7 +277,7 @@ int main(){
   //create and train network:
   neuralnet net1({784,32,10}); //sets network shape
   cout << "Training with SGD..." << endl;
-  net1.SGD(10, 3, 30, imgs, labels, testimgs, testlabels); //batch_size, eta, epochamount, images, labels, testimages, testlabels
+  net1.SGD(10, 3, 30, imgs, labels, testimgs, testlabels, 60000); //batch_size, eta, epochamount, images, labels, testimages, testlabels, datasize
   cout << "Stochastic gradient descent complete" << endl;
   //test network performance:
   net1.test(testimgs, testlabels);
