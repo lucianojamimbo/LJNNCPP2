@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <random>
+#include <algorithm>
 #include "vectio.h"
 #include "nnmath.h"
 #include "mnist.h"
@@ -88,10 +89,11 @@ public:
 
   void SGD(const int batch_size,
 	   const float eta,
+	   const int epochamount,
 	   vector<vector<float>>& imgs,
 	   vector<int>& labels
 	   ){
-    for (int epoch = 0; epoch < 10; epoch++){
+    for (int epoch = 0; epoch < epochamount; epoch++){
       for (int image = 0; image < 60000/batch_size; image++){
 	//calc n_b and n_w over a batch:
 	for (int batchiter = 0; batchiter < batch_size; batchiter++){
@@ -231,14 +233,21 @@ float MSE(const vector<float>& outactivs,
 
 
 int main(){
-
   //load dataset:
-  cout << "Loading images" << endl;
+  cout << "Loading data" << endl;
   vector<vector<float>> imgs = loadimages();
   vector<int> labels = loadlabels();
-  cout << "Images loaded" << endl;
+  vector<vector<float>> testimgs = loadtestimages();
+  vector<int> testlabels = loadtestlabels();
+  cout << "Data loaded" << endl;
   cout << "Normalising data" << endl;
   for (auto& i : imgs){
+    for (auto& i2 : i){
+      i2 = i2/255;
+    }
+  }
+  
+  for (auto& i : testimgs){
     for (auto& i2 : i){
       i2 = i2/255;
     }
@@ -247,9 +256,17 @@ int main(){
   
   //create and train network:
   neuralnet net1({784,32,10}); //sets network shape
-  net1.SGD(10, 3, imgs, labels); //batch_size, eta, images, labels
-
+  cout << "Training with SGD..." << endl;
+  net1.SGD(10, 3, 15, imgs, labels); //batch_size, eta, epochamount, images, labels
+  cout << "Stochastic gradient descent complete" << endl;
   //test network performance:
-  
-  
+  int correctclassifications = 0;
+  for (int image = 0; image < 10000; image++){
+    net1.activations[0] = testimgs[image];
+    net1.feedforwards();
+    if ((max_element(net1.activations.back().begin(), net1.activations.back().end()) - net1.activations.back().begin()) == testlabels[image]){
+      correctclassifications += 1;
+    }
+  }
+  cout << "images correctly classified out of 10000: " << correctclassifications << endl;
 }
