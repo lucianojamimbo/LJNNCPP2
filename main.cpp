@@ -127,7 +127,7 @@ public:
     
     for (int epoch = 0; epoch < epochamount; epoch++){
       shuffle(begin(shuffledata), end(shuffledata), rng); //do this so we access our data in a different order every epoch
-      for (int image = 0; image < datasize; image++){
+      for (int image = 0; image < datasize; ){
 	//calc n_b and n_w over a batch:
 	for (int batchiter = 0; batchiter < batch_size; batchiter++){
 	  this->activations[0] = imgs[shuffledata[image]]; //set net input
@@ -277,7 +277,7 @@ int main(){
   //create and train network:
   neuralnet net1({784,32,10}); //sets network shape
   cout << "Training with SGD..." << endl;
-  net1.SGD(10, 3, 30, imgs, labels, testimgs, testlabels, 60000, 10000); //batch_size, eta, epochamount, images, labels, testimages, testlabels, datasize, testdatasize
+  net1.SGD(10, 1, 30, imgs, labels, testimgs, testlabels, 60000, 10000); //batch_size, eta, epochamount, images, labels, testimages, testlabels, datasize, testdatasize
   cout << "Stochastic gradient descent complete" << endl;
   //test network performance:
   net1.test(testimgs, testlabels, 10000);
