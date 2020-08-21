@@ -127,7 +127,7 @@ public:
     
     for (int epoch = 0; epoch < epochamount; epoch++){
       shuffle(begin(shuffledata), end(shuffledata), rng); //do this so we access our data in a different order every epoch
-      for (int image = 0; image < datasize/batch_size; image++){
+      for (int image = 0; image < datasize; image++){
 	//calc n_b and n_w over a batch:
 	for (int batchiter = 0; batchiter < batch_size; batchiter++){
 	  this->activations[0] = imgs[shuffledata[image]]; //set net input
@@ -135,8 +135,6 @@ public:
 	  this->desiredoutput[labels[shuffledata[image]]] = 1;
 	  this->feedforwards(); //forwards pass to calculate activations
 	  this->backprop(); //backwards pass to calculate delta
-	  //MSE(net1.activations.back(), net1.desiredoutput, net1.cost);
-	  //cout << net1.cost << endl;
 	  image += 1;
 	  //calc nabla_b
 	  for (int layer = 0; layer < this->biases.size(); layer++){
