@@ -28,24 +28,21 @@ public:
   vector<vector<float>> dp;
   vector<float> desiredoutput;
   vector<vector<float>> delta;
-
   vector<vector<float>> nabla_b;
   vector<vector<vector<float>>> nabla_w;
   vector<vector<vector<float>>> nabla_w_temp;
 
   void feedforwards(){
-    
-  for (int layer = 0; layer < this->activations.size()-1; layer++){
-
-    for (int neuron = 0; neuron < this->activations[layer+1].size(); neuron++){
-      dot(this->weights[layer][neuron], this->activations[layer], this->activations[layer+1][neuron]);
-    }
-    
-    vectadd(this->activations[layer+1], this->biases[layer], this->activations[layer+1]);
-    this->presigactivations[layer+1] = this->activations[layer+1];
-    vectsigmoid(this->activations[layer+1], this->activations[layer+1]);
-    }
-
+    for (int layer = 0; layer < this->activations.size()-1; layer++){
+      
+      for (int neuron = 0; neuron < this->activations[layer+1].size(); neuron++){
+	dot(this->weights[layer][neuron], this->activations[layer], this->activations[layer+1][neuron]);
+      }
+      
+      vectadd(this->activations[layer+1], this->biases[layer], this->activations[layer+1]);
+      this->presigactivations[layer+1] = this->activations[layer+1];
+      vectsigmoid(this->activations[layer+1], this->activations[layer+1]);
+    } 
   }
 
   void backprop(){
@@ -53,9 +50,12 @@ public:
     for (int layer = 0; layer < this->sigprime.size(); layer++){
       vectsigmoidprime(this->presigactivations[layer+1], this->sigprime[layer]);
     }
-
-    //get error in last layer
-    vectsub(this->activations.back(), this->desiredoutput, this->nabC);
+    
+    //calc nabla c
+    CEderivative(this->activations.back(), this->desiredoutput, this->nabC); //cross-entropy derivative
+    //MSEderivative(this->activations.back(), this->desiredoutput, this->nabC); //mean squared error derivative
+    
+    //calc delta.back()
     hadamard(this->nabC, this->sigprime.back(), this->delta.back());
 
     //propogate backwards
@@ -84,7 +84,7 @@ public:
     }
 
   }
-  
+
   void test(const vector<vector<float>>& timg,
 	    const vector<int>& tlabel,
 	    const int testdatasize
@@ -101,7 +101,7 @@ public:
   }
 
 
-  
+
   void SGD(const int batch_size,
 	   const float eta,
 	   const int epochamount,
@@ -112,7 +112,7 @@ public:
 	   const int datasize,
 	   const int testdatasize
 	   ){
-    
+
     //create a vector with a length the same as the size of our data,
     //then make shuffledata[i] = i.
     //then we can shuffle shuffledata every epoch and use it to index our data in a random way
@@ -156,13 +156,13 @@ public:
     }
   }
 
-  
+
   //initialise variables
   neuralnet(const vector<int>& sizes){
 
     typename std::uniform_real_distribution<float>::param_type prms (float{-1}, float{1});
     this->dist.param (prms);
-    
+
     //fill weights
     this->weights.resize(sizes.size()-1);
     for (int layer = 0; layer < this->weights.size(); layer++){
@@ -174,7 +174,7 @@ public:
 	}
       }
     }
-    
+
     //fill biases
     this->biases.resize(sizes.size()-1);
     for (int layer = 0; layer < this->biases.size(); layer++){
@@ -183,13 +183,13 @@ public:
 	this->biases[layer][item] = dist(generator);
       }
     }
-    
+
     //resize activations
     this->activations.resize(sizes.size());
     for (int layer = 0; layer < this->activations.size(); layer++){
       this->activations[layer].resize(sizes[layer]);
     }
-    
+
     //resize presigactivations vector
     this->presigactivations.resize(sizes.size());
     for (int layer = 0; layer < this->presigactivations.size(); layer++){
@@ -204,7 +204,7 @@ public:
 	this->nabla_b[layer][item] = 1;
       }
     }
-    
+
     //resize nabla_w
     this->nabla_w.resize(this->weights.size());
     for (int layer = 0; layer < this->weights.size(); layer++){
@@ -213,7 +213,7 @@ public:
 	this->nabla_w[layer][sublayer].resize(this->weights[layer][sublayer].size());
       }
     }
-    
+
     //resize nabla_w_temp
     this->nabla_w_temp.resize(this->weights.size());
     for (int layer = 0; layer < this->weights.size(); layer++){
@@ -222,7 +222,7 @@ public:
 	this->nabla_w_temp[layer][sublayer].resize(this->weights[layer][sublayer].size());
       }
     }
-    
+
     //do stuff on backprop variables:
     this->nabC.resize(sizes.back());
     this->sigprime.resize(sizes.size()-1);
@@ -252,6 +252,16 @@ float MSE(const vector<float>& outactivs,
   return cost;
 }
 
+float CE(const vector<float>& outactivs,
+	 const vector<float>& desiredout,
+	 float& cost){
+  cost = 0;
+  for (int neuron = 0; neuron < outactivs.size(); neuron++){
+    cost += (desiredout[neuron] * log(outactivs[neuron])) + (1-desiredout[neuron]*log(1-outactivs[neuron])); 
+  }
+  return cost;
+}
+
 int main(){
   //load dataset:
   cout << "Loading data" << endl;
@@ -266,18 +276,18 @@ int main(){
       i2 = i2/255;
     }
   }
-  
+
   for (auto& i : testimgs){
     for (auto& i2 : i){
       i2 = i2/255;
     }
   }
   cout << "Data normalised" << endl;
-  
+
   //create and train network:
   neuralnet net1({784,32,10}); //sets network shape
   cout << "Training with SGD..." << endl;
-  net1.SGD(10, 1, 30, imgs, labels, testimgs, testlabels, 60000, 10000); //batch_size, eta, epochamount, images, labels, testimages, testlabels, datasize, testdatasize
+  net1.SGD(10, 0.05, 30, imgs, labels, testimgs, testlabels, 60000, 10000); //batch_size, eta, epochamount, images, labels, testimages, testlabels, datasize, testdatasize
   cout << "Stochastic gradient descent complete" << endl;
   //test network performance:
   net1.test(testimgs, testlabels, 10000);
