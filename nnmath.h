@@ -56,6 +56,7 @@ std::vector<float> vectbyscalarmultiply(const std::vector<float>& a,
 
 
 
+
 //==========addition/subtraction=========
 //adds two vectors of the same size
 template <typename T>
@@ -154,4 +155,28 @@ std::vector<float> vectsigmoidprime(const std::vector<float>& a,
     sigmoidprime(a[i], vecttomod[i]);
   }
   return vecttomod;
+}
+
+
+
+
+//==========loss function related==========#
+std::vector<float> CEderivative(const std::vector<float>& outputactivations,
+					  const std::vector<float>& desiredoutput,
+					  std::vector<float>& nabla_c){
+
+  for (int i = 0; i < outputactivations.size(); i++){
+    nabla_c[i] = -(desiredoutput[i]/outputactivations[i]) + ((1-desiredoutput[i])/(1-outputactivations[i]));
+  }
+  
+  return nabla_c;
+}
+
+std::vector<float> MSEderivative(const std::vector<float>& outputactivations,
+				 const std::vector<float>& desiredoutput,
+				 std::vector<float>& nabla_c){
+  
+  vectsub(outputactivations, desiredoutput, nabla_c);
+
+  return nabla_c;
 }
