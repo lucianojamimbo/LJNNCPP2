@@ -69,11 +69,20 @@ public:
 
   }
 
-  void updateparams(const float& eta, const int& batch_size){
+  void updateparams(const float& eta,
+		    const int& batch_size,
+		    const float& lambda,
+		    const int& datasize){
     //update biases
     for (int layer = 0; layer < this->biases.size(); layer++){
       vectbyscalarmultiply(this->nabla_b[layer], eta/batch_size, this->nabla_b[layer]);
       vectsub(this->biases[layer], this->nabla_b[layer], this->biases[layer]);
+    }
+    //apply regularisation to weights:
+    for (int layer = 0; layer < this->weights.size(); layer++){
+      for (int neuron = 0; neuron < this->weights[layer].size(); neuron++){
+	vectbyscalarmultiply(this->weights[layer][neuron], 1-((eta*lambda)/datasize), this->weights[layer][neuron]);
+      }
     }
     //update weights
     for (int layer = 0; layer < this->weights.size(); layer++){
@@ -104,6 +113,7 @@ public:
 
   void SGD(const int batch_size,
 	   const float eta,
+	   const float lambda,
 	   const int epochamount,
 	   const vector<vector<float>>& imgs,
 	   const vector<int>& labels,
@@ -149,7 +159,7 @@ public:
 	  }
 	}
 	//update network parameters based on n_w and n_b:
-	this->updateparams(eta, batch_size);
+	this->updateparams(eta, batch_size, lambda, datasize);
       }
       cout << "epoch " << epoch << " complete" << endl;
       this->test(testimgs, testlabels, testdatasize);
@@ -285,9 +295,9 @@ int main(){
   cout << "Data normalised" << endl;
 
   //create and train network:
-  neuralnet net1({784,32,10}); //sets network shape
+  neuralnet net1({784,100,10}); //sets network shape
   cout << "Training with SGD..." << endl;
-  net1.SGD(10, 0.05, 30, imgs, labels, testimgs, testlabels, 60000, 10000); //batch_size, eta, epochamount, images, labels, testimages, testlabels, datasize, testdatasize
+  net1.SGD(5, 0.05, 5, 64, imgs, labels, testimgs, testlabels, 60000, 10000); //batch_size, eta, epochamount, images, labels, testimages, testlabels, datasize, testdatasize
   cout << "Stochastic gradient descent complete" << endl;
   //test network performance:
   net1.test(testimgs, testlabels, 10000);
