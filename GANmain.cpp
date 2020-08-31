@@ -94,79 +94,6 @@ public:
 
   }
 
-  void test(const vector<vector<float>>& timg,
-	    const vector<int>& tlabel,
-	    const int testdatasize
-	    ){
-    int correctclassifications = 0;
-    for (int image = 0; image < testdatasize; image++){
-      this->activations[0] = timg[image];
-      this->feedforwards();
-      if ((max_element(this->activations.back().begin(), this->activations.back().end()) - this->activations.back().begin()) == tlabel[image]){
-	correctclassifications += 1;
-      }
-    }
-    cout << "images correctly classified out of 10000: " << correctclassifications << endl;
-  }
-
-
-  void SGD(const int batch_size,
-	   const float eta,
-	   const float lambda,
-	   const int epochamount,
-	   const vector<vector<float>>& imgs,
-	   const vector<int>& labels,
-	   const vector<vector<float>>& testimgs,
-	   const vector<int>& testlabels,
-	   const int datasize,
-	   const int testdatasize
-	   ){
-
-    //create a vector with a length the same as the size of our data,
-    //then make shuffledata[i] = i.
-    //then we can shuffle shuffledata every epoch and use it to index our data in a random way
-    //without shuffling our data directly.
-    //which is probably faster since less memory is moved around.
-    auto rng = std::default_random_engine {};
-    vector<int> shuffledata;
-    shuffledata.resize(datasize);
-    for (int i = 0; i < datasize; i++){
-      shuffledata[i] = i;
-    }
-    
-    for (int epoch = 0; epoch < epochamount; epoch++){
-      shuffle(begin(shuffledata), end(shuffledata), rng); //do this so we access our data in a different order every epoch
-      for (int image = 0; image < datasize; ){
-	//calc n_b and n_w over a batch:
-	for (int batchiter = 0; batchiter < batch_size; batchiter++){
-	  this->activations[0] = imgs[shuffledata[image]]; //set net input
-	  this->desiredoutput = {0,0,0,0,0,0,0,0,0,0};
-	  this->desiredoutput[labels[shuffledata[image]]] = 1;
-	  this->feedforwards(); //forwards pass to calculate activations
-	  this->backprop(); //backwards pass to calculate delta
-	  image += 1;
-	  //calc nabla_b
-	  for (int layer = 0; layer < this->biases.size(); layer++){
-	    vectadd(this->nabla_b[layer], this->delta[layer], this->nabla_b[layer]);
-	  }
-	  //calc nabla_w
-	  for (int layer = 0; layer < this->weights.size(); layer++){
-	    for (int neuron = 0; neuron < this->weights[layer].size(); neuron++){
-	      vectbyscalarmultiply(this->activations[layer], this->delta[layer][neuron], this->nabla_w_temp[layer][neuron]);
-	      vectadd(this->nabla_w[layer][neuron], this->nabla_w_temp[layer][neuron], this->nabla_w[layer][neuron]);
-	    }
-	  }
-	}
-	//update network parameters based on n_w and n_b:
-	this->updateparams(eta, batch_size, lambda, datasize);
-      }
-      cout << "epoch " << epoch << " complete" << endl;
-      this->test(testimgs, testlabels, testdatasize);
-    }
-  }
-  
-
-
   //initialise variables
   neuralnet(const vector<int>& sizes){
 
@@ -275,14 +202,39 @@ private:
 
 class discnet : public neuralnet{
   public:
-    discnet(const vector<int>& sizes) : neuralnet(sizes)
-    {
+    discnet(const vector<int>& sizes) : neuralnet(sizes){
         // Add any discriminator-specific construction code here, if necessary
     }
 
-    void someNewFunction()
-    {
-        // This function only exists for discriminators.
+  void SGDstep(const int& minibatchsize,
+	       const float& eta,
+	       const float& lambda,
+	       const int& datasize,
+	       const vector<vector<float>>& minidatabatch,
+	       const vector<float>& minidatabatchlabels,
+	       const vector<int>& shuffledata){
+    
+      for (int batchiter = 0; batchiter < minibatchsize; batchiter++){
+        this->activations[0] = minidatabatch[shuffledata[batchiter]];
+        this->desiredoutput[0] = minidatabatchlabels[shuffledata[batchiter]];
+        this->feedforwards();
+        this->backprop();
+
+	
+	//calc nabla_b
+	for (int layer = 0; layer < this->biases.size(); layer++){
+	  vectadd(this->nabla_b[layer], this->delta[layer], this->nabla_b[layer]);
+	}
+	//calc nabla_w
+	for (int layer = 0; layer < this->weights.size(); layer++){
+	  for (int neuron = 0; neuron < this->weights[layer].size(); neuron++){
+	    vectbyscalarmultiply(this->activations[layer], this->delta[layer][neuron], this->nabla_w_temp[layer][neuron]);
+	    vectadd(this->nabla_w[layer][neuron], this->nabla_w_temp[layer][neuron], this->nabla_w[layer][neuron]);
+	  }
+	}
+      }
+      //update network parameters based on n_w and n_b:
+      this->updateparams(eta, minibatchsize, lambda, datasize);
     }
 };
 
@@ -340,6 +292,10 @@ int main(){
 
 
   int minibatchsize = 20;
+  int globalimgcount = 0;
+  float eta = 1;
+  float lambda = 1;
+  int datasize = 60000;
   
   vector<vector<float>> minidatabatch;
   minidatabatch.resize(minibatchsize);
@@ -359,15 +315,9 @@ int main(){
   for (int i = 0; i < minibatchsize; i++){
     shuffledata[i] = i;
   }
-
-  int globalimgcount = 0;
-  float eta = 1;
-  float lambda = 1;
-  int datasize = 60000;
-  float cost = 0;
-
-  for (int batch = 0; batch < 1000; batch++){
-    
+  
+  for (int batch = 0; batch < (imgs.size()*2)/minibatchsize; batch++){
+    shuffle(begin(shuffledata), end(shuffledata), rng);
     //create a batch of data:
     for (int img = 0; img < minibatchsize/2; img++){
       minidatabatch[img] = imgs[globalimgcount];
@@ -377,31 +327,6 @@ int main(){
       minidatabatch[img+(minibatchsize/2)] = gnet.activations.back();
       minidatabatchlabels[img+(minibatchsize/2)] = 1; //desired output for fake instance = 1 (meaning 100% probability image is fake)
     }
-
-    //train discriminator with batch:
-    for (int batchiter = 0; batchiter < minibatchsize; batchiter++){
-      dnet.activations[0] = minidatabatch[shuffledata[batchiter]];
-      dnet.desiredoutput[0] = minidatabatchlabels[shuffledata[batchiter]];
-      dnet.feedforwards();
-      dnet.backprop();
-      MSE(dnet.activations.back(), dnet.desiredoutput, cost);
-      cout << cost << endl;
-      
-      //calc nabla_b
-      for (int layer = 0; layer < dnet.biases.size(); layer++){
-	vectadd(dnet.nabla_b[layer], dnet.delta[layer], dnet.nabla_b[layer]);
-      }
-      //calc nabla_w
-      for (int layer = 0; layer < dnet.weights.size(); layer++){
-	for (int neuron = 0; neuron < dnet.weights[layer].size(); neuron++){
-	  vectbyscalarmultiply(dnet.activations[layer], dnet.delta[layer][neuron], dnet.nabla_w_temp[layer][neuron]);
-	  vectadd(dnet.nabla_w[layer][neuron], dnet.nabla_w_temp[layer][neuron], dnet.nabla_w[layer][neuron]);
-	}
-      }
-    }
-    //update network parameters based on n_w and n_b:
-    dnet.updateparams(eta, minibatchsize, lambda, datasize);
+    dnet.SGDstep(minibatchsize, eta, lambda, datasize, minidatabatch, minidatabatchlabels, shuffledata);
   }
-
-  
 }
