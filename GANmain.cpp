@@ -2,6 +2,8 @@
 #include <vector>
 #include <random>
 #include <algorithm>
+#include <opencv2/opencv.hpp>
+#include <opencv2/imgproc.hpp>
 #include "vectio.h"
 #include "nnmath.h"
 #include "mnist.h"
@@ -36,6 +38,10 @@ public:
     for (int layer = 0; layer < this->activations.size()-1; layer++){
       
       for (int neuron = 0; neuron < this->activations[layer+1].size(); neuron++){
+	if (activations[layer].size() == 0){
+	  cout << "l: " << layer << endl;
+	  cout << "n: " << neuron << endl;
+	}
 	dot(this->weights[layer][neuron], this->activations[layer], this->activations[layer+1][neuron]);
       }
       
@@ -193,6 +199,23 @@ public:
     }
     this->feedforwards();
   }
+
+  void backprop(){
+    //calc sigprime for all non-input layers
+    for (int layer = 0; layer < this->sigprime.size(); layer++){
+      vectsigmoidprime(this->presigactivations[layer+1], this->sigprime[layer]);
+    }
+
+    //propogate backwards
+    for (int layer = this->delta.size()-2; layer > -1; layer--){
+      transpose(this->weights[layer+1], this->tpw); //get transpose of weights[layer+1] and save in tpw
+      for (int neuron = 0; neuron < this->activations[layer+1].size(); neuron++){ //get dotprod of tpw and delta[layer+1]
+        dot(this->tpw[neuron], this->delta[layer+1], this->dp[layer][neuron]);
+      }
+      hadamard(this->dp[layer], this->sigprime[layer], this->delta[layer]);
+    }
+  }
+
   
 private:
   random_device rd{};
@@ -206,6 +229,8 @@ class discnet : public neuralnet{
         // Add any discriminator-specific construction code here, if necessary
     }
 
+
+  
   void SGDstep(const int& minibatchsize,
 	       const float& eta,
 	       const float& lambda,
@@ -214,49 +239,43 @@ class discnet : public neuralnet{
 	       const vector<float>& minidatabatchlabels,
 	       const vector<int>& shuffledata){
     
-      for (int batchiter = 0; batchiter < minibatchsize; batchiter++){
-        this->activations[0] = minidatabatch[shuffledata[batchiter]];
-        this->desiredoutput[0] = minidatabatchlabels[shuffledata[batchiter]];
-        this->feedforwards();
-        this->backprop();
+    for (int batchiter = 0; batchiter < minibatchsize; batchiter++){
+      this->activations[0] = minidatabatch[shuffledata[batchiter]];
+      this->desiredoutput[0] = minidatabatchlabels[shuffledata[batchiter]];
+      this->feedforwards();
+      this->backprop();
 
 	
-	//calc nabla_b
-	for (int layer = 0; layer < this->biases.size(); layer++){
-	  vectadd(this->nabla_b[layer], this->delta[layer], this->nabla_b[layer]);
-	}
-	//calc nabla_w
-	for (int layer = 0; layer < this->weights.size(); layer++){
-	  for (int neuron = 0; neuron < this->weights[layer].size(); neuron++){
-	    vectbyscalarmultiply(this->activations[layer], this->delta[layer][neuron], this->nabla_w_temp[layer][neuron]);
-	    vectadd(this->nabla_w[layer][neuron], this->nabla_w_temp[layer][neuron], this->nabla_w[layer][neuron]);
-	  }
+      //calc nabla_b
+      for (int layer = 0; layer < this->biases.size(); layer++){
+	vectadd(this->nabla_b[layer], this->delta[layer], this->nabla_b[layer]);
+      }
+      //calc nabla_w
+      for (int layer = 0; layer < this->weights.size(); layer++){
+	for (int neuron = 0; neuron < this->weights[layer].size(); neuron++){
+	  vectbyscalarmultiply(this->activations[layer], this->delta[layer][neuron], this->nabla_w_temp[layer][neuron]);
+	  vectadd(this->nabla_w[layer][neuron], this->nabla_w_temp[layer][neuron], this->nabla_w[layer][neuron]);
 	}
       }
-      //update network parameters based on n_w and n_b:
-      this->updateparams(eta, minibatchsize, lambda, datasize);
     }
+    //update network parameters based on n_w and n_b:
+    this->updateparams(eta, minibatchsize, lambda, datasize);
+  }
 };
-
-
-float MSE(const vector<float>& outactivs,
-	  const vector<float>& desiredout,
-	  float& cost){
-  cost = 0;
-  for (int neuron = 0; neuron < outactivs.size(); neuron++){
-    cost += pow((outactivs[neuron]-desiredout[neuron]) ,2);
+void showimg(vector<float>& vec,
+	     cv::Mat &img){
+  
+  // Copy v to img.
+  size_t vi = 0; 
+  for (size_t i = 0; i < 28; ++i) {
+    for (size_t j = 0; j < 28; ++j) {
+      img.at<float>(i,j) = vec[vi++];
+    }
   }
-  return cost;
-}
-
-float CE(const vector<float>& outactivs,
-	 const vector<float>& desiredout,
-	 float& cost){
-  cost = 0;
-  for (int neuron = 0; neuron < outactivs.size(); neuron++){
-    cost += (desiredout[neuron] * log(outactivs[neuron])) + (1-desiredout[neuron]*log(1-outactivs[neuron])); 
-  }
-  return cost;
+  // Display
+  namedWindow ("", cv::WINDOW_AUTOSIZE);
+  cv::imshow ("", img);
+  cv::waitKey(0);
 }
 
 int main(){
@@ -286,17 +305,19 @@ int main(){
   uniform_real_distribution<float> dist;
   typename std::uniform_real_distribution<float>::param_type prms (float{0}, float{1});
   dist.param (prms);
+
+  cv::Mat img(28, 28, CV_32F, cv::Scalar(0));
   
-  gennet gnet({10,32,784}); //generator net
+  gennet gnet({64,64,784}); //generator net
   discnet dnet({784,32,1}); //discriminator net
+  int minibatchsize = 10; //batch size for SGD
+  float eta = 1; //generator learning rate
+  float Deta = 1; //discriminator learning rate
+  float lambda = 5; //regularisation parameter
+  int datasize = 60000; //size of dataset
 
-
-  int minibatchsize = 20;
-  int globalimgcount = 0;
-  float eta = 1;
-  float lambda = 1;
-  int datasize = 60000;
   
+  int globalimgcount = 0;
   vector<vector<float>> minidatabatch;
   minidatabatch.resize(minibatchsize);
   for (auto& i : minidatabatch){
@@ -315,18 +336,91 @@ int main(){
   for (int i = 0; i < minibatchsize; i++){
     shuffledata[i] = i;
   }
+  vector<float> DPtempplaceholder;
+  DPtempplaceholder.resize(gnet.activations.back().size());
+
   
-  for (int batch = 0; batch < (imgs.size()*2)/minibatchsize; batch++){
-    shuffle(begin(shuffledata), end(shuffledata), rng);
-    //create a batch of data:
-    for (int img = 0; img < minibatchsize/2; img++){
-      minidatabatch[img] = imgs[globalimgcount];
-      minidatabatchlabels[img] = 0; //desired output for real instance = 0 (meaning 0% probability image is fake)
-      globalimgcount += 1;
+  for (int epoch = 0; epoch < 2; epoch++){
+    //test discriminator:
+    int x = 0;
+    for (int i = 0; i < 5000; i++){
+      dnet.activations[0] = imgs[i];
+      dnet.feedforwards();
+      if (dnet.activations.back()[0] < 0.5){
+	x += 1;
+      }
+      
       gnet.generate();
-      minidatabatch[img+(minibatchsize/2)] = gnet.activations.back();
-      minidatabatchlabels[img+(minibatchsize/2)] = 1; //desired output for fake instance = 1 (meaning 100% probability image is fake)
+      
+      dnet.activations[0] = gnet.activations.back();
+      dnet.feedforwards();
+      if (dnet.activations.back()[0] > 0.5){
+	x += 1;
+      }
     }
-    dnet.SGDstep(minibatchsize, eta, lambda, datasize, minidatabatch, minidatabatchlabels, shuffledata);
+    cout << "Discriminator gets " << x/100.0 << "% accuracy before epoch " << epoch <<  endl;
+    
+    globalimgcount = 0;
+    for (int batch = 0; batch < (imgs.size()*2)/minibatchsize; batch++){
+      
+      
+      //Do 1 step of dnet SGD:
+      shuffle(begin(shuffledata), end(shuffledata), rng); //shuffle shuffling vector
+      //create a batch of real and fake data:
+      for (int img = 0; img < minibatchsize/2; img++){
+	minidatabatch[img] = imgs[globalimgcount];
+	minidatabatchlabels[img] = 0; //desired output for real instance = 0
+	globalimgcount += 1;
+	gnet.generate(); //generate new latent space values and feed gen net forwards
+	minidatabatch[img+(minibatchsize/2)] = gnet.activations.back();
+	minidatabatchlabels[img+(minibatchsize/2)] = 0.9; //desired output for fake instance = 0.9 (smoothed label)
+      }
+      dnet.SGDstep(minibatchsize, Deta, lambda, datasize, minidatabatch, minidatabatchlabels, shuffledata);
+      
+
+
+    
+      //Do 1 step of gnet SGD:
+      for (int batchiter = 0; batchiter < minibatchsize; batchiter++){
+	gnet.generate();
+	dnet.activations[0] = gnet.activations.back();
+	dnet.desiredoutput[0] = 0;
+	dnet.feedforwards();
+	dnet.backprop();
+	//calc sigprime for gnet output layer:
+	vectsigmoidprime(gnet.presigactivations.back(), gnet.sigprime.back());
+	//compute gnet last layer delta using dnet delta[0]:
+	transpose(dnet.weights[0], gnet.tpw); //get transpose of weights[layer+1] and save in tpw
+	for (int neuron = 0; neuron < dnet.activations[0].size(); neuron++){ //get dotprod of tpw and delta[layer+1]
+	  dot(gnet.tpw[neuron], dnet.delta[0], DPtempplaceholder[neuron]);
+	}
+	hadamard(DPtempplaceholder, gnet.sigprime.back(), gnet.delta.back());
+	//backpropagate gnet last layer delta:
+	gnet.backprop();
+	//calc nabla_b
+	for (int layer = 0; layer < gnet.biases.size(); layer++){
+	  vectadd(gnet.nabla_b[layer], gnet.delta[layer], gnet.nabla_b[layer]);
+	}
+	//calc nabla_w
+	for (int layer = 0; layer < gnet.weights.size(); layer++){
+	  for (int neuron = 0; neuron < gnet.weights[layer].size(); neuron++){
+	    vectbyscalarmultiply(gnet.activations[layer], gnet.delta[layer][neuron], gnet.nabla_w_temp[layer][neuron]);
+	    vectadd(gnet.nabla_w[layer][neuron], gnet.nabla_w_temp[layer][neuron], gnet.nabla_w[layer][neuron]);
+	  }
+	}
+      }
+      gnet.updateparams(eta, minibatchsize, lambda, datasize);
+    }
+    
+  }
+
+
+  
+
+
+  //show outputs with opencv::
+  for(int i = 0; i < 1000; i++){
+    gnet.generate();
+    showimg(gnet.activations.back(), img);
   }
 }

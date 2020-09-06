@@ -35,6 +35,7 @@ std::vector<T> hadamard(const std::vector<T>& a,
   }
   if (a.size() !=  product.size()){
     std::cout << "WARN: hardamard 'product' input size != 'a' input or 'b' input size" << std::endl;
+    std::cout << "product size: " << product.size() << std::endl;
   }
   for (int i = 0; i < a.size(); i++){
     product[i] = a[i] * b[i];
