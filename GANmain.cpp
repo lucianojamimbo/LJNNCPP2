@@ -277,6 +277,15 @@ void showimg(vector<float>& vec,
   cv::imshow ("", img);
   cv::waitKey(0);
 }
+float CE(const vector<float>& outactivs,
+	 const vector<float>& desiredout,
+	 float& cost){
+  cost = 0;
+  for (int neuron = 0; neuron < outactivs.size(); neuron++){
+    cost += (desiredout[neuron] * log(outactivs[neuron])) + ((1-desiredout[neuron])*log(1-outactivs[neuron])); 
+  }
+  return cost;
+}
 
 int main(){
   //load dataset:
@@ -308,15 +317,15 @@ int main(){
 
   cv::Mat img(28, 28, CV_32F, cv::Scalar(0));
   
-  gennet gnet({64,64,784}); //generator net
+  gennet gnet({10,32,784}); //generator net
   discnet dnet({784,32,1}); //discriminator net
-  int minibatchsize = 10; //batch size for SGD
-  float eta = 1; //generator learning rate
-  float Deta = 1; //discriminator learning rate
+  int minibatchsize = 20; //batch size for SGD
+  float eta = 0.1; //generator learning rate
+  float Deta = 0.1; //discriminator learning rate
   float lambda = 5; //regularisation parameter
   int datasize = 60000; //size of dataset
 
-  
+  float cost = 0;
   int globalimgcount = 0;
   vector<vector<float>> minidatabatch;
   minidatabatch.resize(minibatchsize);
@@ -340,7 +349,7 @@ int main(){
   DPtempplaceholder.resize(gnet.activations.back().size());
 
   
-  for (int epoch = 0; epoch < 2; epoch++){
+  for (int epoch = 0; epoch < 10; epoch++){
     //test discriminator:
     int x = 0;
     for (int i = 0; i < 5000; i++){
@@ -349,9 +358,7 @@ int main(){
       if (dnet.activations.back()[0] < 0.5){
 	x += 1;
       }
-      
       gnet.generate();
-      
       dnet.activations[0] = gnet.activations.back();
       dnet.feedforwards();
       if (dnet.activations.back()[0] > 0.5){
@@ -361,56 +368,67 @@ int main(){
     cout << "Discriminator gets " << x/100.0 << "% accuracy before epoch " << epoch <<  endl;
     
     globalimgcount = 0;
-    for (int batch = 0; batch < (imgs.size()*2)/minibatchsize; batch++){
+    for (int batch = 0; batch < (imgs.size())/minibatchsize; batch++){
       
-      
-      //Do 1 step of dnet SGD:
+      //Do 2 steps of dnet SGD (diff data each time):
       shuffle(begin(shuffledata), end(shuffledata), rng); //shuffle shuffling vector
-      //create a batch of real and fake data:
-      for (int img = 0; img < minibatchsize/2; img++){
+      //create a batch of real data & do step of SGD:
+      for (int img = 0; img < minibatchsize; img++){
 	minidatabatch[img] = imgs[globalimgcount];
-	minidatabatchlabels[img] = 0; //desired output for real instance = 0
+	minidatabatchlabels[img] = 0.9; //desired output for real instance = 0.9
 	globalimgcount += 1;
-	gnet.generate(); //generate new latent space values and feed gen net forwards
-	minidatabatch[img+(minibatchsize/2)] = gnet.activations.back();
-	minidatabatchlabels[img+(minibatchsize/2)] = 0.9; //desired output for fake instance = 0.9 (smoothed label)
       }
       dnet.SGDstep(minibatchsize, Deta, lambda, datasize, minidatabatch, minidatabatchlabels, shuffledata);
+      //CE(dnet.activations.back(), dnet.desiredoutput, cost);
+      //cout << "D cost on real: " << cost;
       
-
-
-    
-      //Do 1 step of gnet SGD:
-      for (int batchiter = 0; batchiter < minibatchsize; batchiter++){
+      //create a batch of fake data & do step of SGD:
+      for (int img = 0; img < minibatchsize; img++){
 	gnet.generate();
-	dnet.activations[0] = gnet.activations.back();
-	dnet.desiredoutput[0] = 0;
-	dnet.feedforwards();
-	dnet.backprop();
-	//calc sigprime for gnet output layer:
-	vectsigmoidprime(gnet.presigactivations.back(), gnet.sigprime.back());
-	//compute gnet last layer delta using dnet delta[0]:
-	transpose(dnet.weights[0], gnet.tpw); //get transpose of weights[layer+1] and save in tpw
-	for (int neuron = 0; neuron < dnet.activations[0].size(); neuron++){ //get dotprod of tpw and delta[layer+1]
-	  dot(gnet.tpw[neuron], dnet.delta[0], DPtempplaceholder[neuron]);
-	}
-	hadamard(DPtempplaceholder, gnet.sigprime.back(), gnet.delta.back());
-	//backpropagate gnet last layer delta:
-	gnet.backprop();
-	//calc nabla_b
-	for (int layer = 0; layer < gnet.biases.size(); layer++){
-	  vectadd(gnet.nabla_b[layer], gnet.delta[layer], gnet.nabla_b[layer]);
-	}
-	//calc nabla_w
-	for (int layer = 0; layer < gnet.weights.size(); layer++){
-	  for (int neuron = 0; neuron < gnet.weights[layer].size(); neuron++){
-	    vectbyscalarmultiply(gnet.activations[layer], gnet.delta[layer][neuron], gnet.nabla_w_temp[layer][neuron]);
+	minidatabatch[img] = gnet.activations.back();
+	minidatabatchlabels[img] = 0.1; //desired output for fake instance = 0.1
+      }
+      dnet.SGDstep(minibatchsize, Deta, lambda, datasize, minidatabatch, minidatabatchlabels, shuffledata);
+      //CE(dnet.activations.back(), dnet.desiredoutput, cost);
+      //cout << " D cost on fake: " << cost << endl;
+      
+      
+      //Do k steps of gnet SGD:
+      for (int k = 0; k < 2; k++){
+	for (int batchiter = 0; batchiter < minibatchsize; batchiter++){
+	  gnet.generate();
+	  dnet.activations[0] = gnet.activations.back();
+	  dnet.desiredoutput[0] = 1;
+	  dnet.feedforwards();
+	  dnet.backprop();
+	  //calc sigprime for gnet output layer:
+	  vectsigmoidprime(gnet.presigactivations.back(), gnet.sigprime.back());
+	  //compute gnet last layer delta using dnet delta[0]:
+	  transpose(dnet.weights[0], gnet.tpw); //get transpose of weights[layer+1] and save in tpw
+	  for (int neuron = 0; neuron < dnet.activations[0].size(); neuron++){ //get dotprod of tpw and delta[layer+1]
+	    dot(gnet.tpw[neuron], dnet.delta[0], DPtempplaceholder[neuron]);
+	  }
+	  hadamard(DPtempplaceholder, gnet.sigprime.back(), gnet.delta.back());
+	  //backpropagate gnet last layer delta:
+	  gnet.backprop();
+	  //calc nabla_b
+	  for (int layer = 0; layer < gnet.biases.size(); layer++){
+	    vectadd(gnet.nabla_b[layer], gnet.delta[layer], gnet.nabla_b[layer]);
+	  }
+	  //calc nabla_w
+	  for (int layer = 0; layer < gnet.weights.size(); layer++){
+	    for (int neuron = 0; neuron < gnet.weights[layer].size(); neuron++){
+	      vectbyscalarmultiply(gnet.activations[layer], gnet.delta[layer][neuron], gnet.nabla_w_temp[layer][neuron]);
 	    vectadd(gnet.nabla_w[layer][neuron], gnet.nabla_w_temp[layer][neuron], gnet.nabla_w[layer][neuron]);
+	    }
 	  }
 	}
+	gnet.updateparams(eta, minibatchsize, lambda, datasize);
+	//CE(dnet.activations.back(), dnet.desiredoutput, cost);
+	//cout << "G cost: " << cost << endl;
       }
-      gnet.updateparams(eta, minibatchsize, lambda, datasize);
     }
+    
     
   }
 
@@ -419,8 +437,9 @@ int main(){
 
 
   //show outputs with opencv::
-  for(int i = 0; i < 1000; i++){
+  for(int i = 0; i < 1938161215186; i++){
     gnet.generate();
+    printV(gnet.activations[0]);
     showimg(gnet.activations.back(), img);
   }
 }
