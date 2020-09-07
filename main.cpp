@@ -267,7 +267,7 @@ float CE(const vector<float>& outactivs,
 	 float& cost){
   cost = 0;
   for (int neuron = 0; neuron < outactivs.size(); neuron++){
-    cost += (desiredout[neuron] * log(outactivs[neuron])) + (1-desiredout[neuron]*log(1-outactivs[neuron])); 
+    cost += (desiredout[neuron] * log(outactivs[neuron])) + ((1-desiredout[neuron])*log(1-outactivs[neuron])); 
   }
   return cost;
 }
