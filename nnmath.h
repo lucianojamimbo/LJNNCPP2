@@ -118,18 +118,65 @@ std::vector<std::vector<T>> transpose(const std::vector<std::vector<T>>& a,
   }
   return transposed;
 }
+//leaky relu function
+float LeakyReLU(const float& a,
+	     float& tomod){
+  if(a > 0){
+    tomod = a;
+  }else{
+    tomod = 0.1*a;
+  }
+  return tomod;
+}
+
+//leaky relu derivative function
+float LeakyReLUprime(const float& a,
+	     float& tomod){
+  if(a > 0){
+    tomod = 1;
+  }else{
+    tomod = 0.1;
+  }
+  return tomod;
+}
 //sigmoid function
 float sigmoid(const float& a,
 	     float& tomod){ //tomod will be modified by this function
   tomod = 1/(1+exp(-a));
   return tomod;
 }
-//sigmoid prime
+//sigmoid derivative
 float sigmoidprime(const float& a,
 		  float& tomod){ //tomod will be modified by this function
   sigmoid(a, tomod);
   tomod = tomod*(1-tomod);
   return tomod;
+}
+//leaky relu function for vectors
+std::vector<float> vectLeakyReLU(const std::vector<float>& a,
+			       std::vector<float>& vecttomod){ //vecttomod will be modified by this function
+  if (a.size() != vecttomod.size()){
+    std::cout << "a.size(): " << a.size() << std::endl;
+    std::cout << "vecttomod.size(): " << vecttomod.size() << std::endl;
+    throw std::runtime_error("vectLeakyReLU received inputs were of different size");
+  }
+  for (int i = 0; i < a.size(); i++){
+    LeakyReLU(a[i], vecttomod[i]);
+  }
+  return vecttomod;
+}
+//leaky relu derivative for vectors
+std::vector<float> vectLeakyReLUprime(const std::vector<float>& a,
+				    std::vector<float>& vecttomod){ //vecttomod will be modified by this function
+  if (a.size() != vecttomod.size()){
+    std::cout << "a.size(): " << a.size() << std::endl;
+    std::cout << "vecttomod.size(): " << vecttomod.size() << std::endl;
+    throw std::runtime_error("vectLeakyReLUprime received inputs were of different size");
+  }
+  for (int i = 0; i < a.size(); i++){
+    LeakyReLUprime(a[i], vecttomod[i]);
+  }
+  return vecttomod;
 }
 //sigmoid function for vectors
 std::vector<float> vectsigmoid(const std::vector<float>& a,
@@ -144,7 +191,7 @@ std::vector<float> vectsigmoid(const std::vector<float>& a,
   }
   return vecttomod;
 }
-//sigmoid prime for vectors
+//sigmoid derivative for vectors
 std::vector<float> vectsigmoidprime(const std::vector<float>& a,
 				    std::vector<float>& vecttomod){ //vecttomod will be modified by this function
   if (a.size() != vecttomod.size()){
@@ -157,7 +204,6 @@ std::vector<float> vectsigmoidprime(const std::vector<float>& a,
   }
   return vecttomod;
 }
-
 
 
 
